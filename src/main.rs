@@ -26,7 +26,15 @@ enum Cmd {
     }
 }
 
-// TODO: add status, log?, stash, fetch, add/commit?
+// TODO: 
+//      - add status, log?, stash, fetch, add/commit?
+//      - file to configure repos and fallback
+//      - parallelize with rayon or tokio ==> think about how to stdout
+//      - better errors
+//      - option for verbosity (stdout, stderr, printf)
+//      - context option if already in one repos
+//      - interactive prompt ?
+//      - customizable args
 
 // ------------ RUNNERS ------------
 
