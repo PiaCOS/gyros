@@ -1,33 +1,32 @@
 use std::process::{ Command, Stdio, Output };
 use std::io::{ self, Write };
-use clap::Parser;
+use clap::{ Parser, Subcommand };
 use colored::Colorize;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// Diff on community and enterprise
-    #[clap(long, short, action, default_value_t = false)]
-    diff: bool,
-
-    /// Pull on community and enterprise
-    #[clap(long, short, action, default_value_t = false)]
-    pull: bool,
-
-    /// Checkout on community and enterprise (give me a branch name)
-    #[arg(short, long, default_value = None)]
-    checkout: Option<String>,
-
-    /// Grep branches in remote (give me some text to match)
-    #[arg(short, long, default_value = None)]
-    grep: Option<String>,
+    #[command(subcommand)]
+    command: Cmd,
 }
 
-fn gyros() {
-    println!("{}", ">-------------------------------------------------------------------------------<".yellow());
-    println!("{}", ">---<>---<>---<>---<>---<>---<>---< G Y R O S >---<>---<>---<>---<>---<>---<>---<".yellow());
-    println!("{}", ">-------------------------------------------------------------------------------<".yellow());
+#[derive(Subcommand, Debug)]
+enum Cmd {
+    /// Diff on all repos
+    Diff,
+    /// Pull on all repos
+    Pull,
+    /// Checkout on both repos or fallback to master (give me a branch name)
+    Checkout {
+        branch: String,
+    },
+    /// Grep branches in local branches (give me some text to match)
+    Grep {
+        text: String,
+    }
 }
+
+// TODO: add status, log?, stash, fetch, add/commit?
 
 // ------------ RUNNERS ------------
 
@@ -74,7 +73,6 @@ fn git_checkout(dir: &str, branch: &str) -> io::Result<()> {
     let output = safe_run(&mut cmd)?;
 
     if output.status.success() {
-        // println!("{}", format!("> Checked out branch '{}' ~\n", branch).purple());
         execute(output)
     } else {
         println!("{}", format!("Sorry.. '{}' does not exist on '{}'..", branch, dir).red().italic());
@@ -85,7 +83,6 @@ fn git_checkout(dir: &str, branch: &str) -> io::Result<()> {
         let fallback = safe_run(&mut fallback_cmd)?;
 
         if fallback.status.success() {
-            // println!("{}", "> Checked out fallback 'master' branch ~\n".purple());
             execute(fallback)
         } else {
             println!("{}", "Sorry.. master branch did not work, you may need to check what is going on here ~".red().italic());
@@ -110,34 +107,40 @@ fn git_grep_branch(dir: &str, grep: &str) -> io::Result<()> {
     execute(output)
 }
 
+// ------------- PRINTS --------------
+
+/*
+fn gyros() {
+    println!("{}", ">-------------------------------------------------------------------------------<".yellow());
+    println!("{}", ">---<>---<>---<>---<>---<>---<>---< G Y R O S >---<>---<>---<>---<>---<>---<>---<".yellow());
+    println!("{}", ">-------------------------------------------------------------------------------<".yellow());
+}
+*/
+
 fn main() -> io::Result<()> {
     let dir1 = "/home/odoo/Dev/odoo/community/";
     let dir2 = "/home/odoo/Dev/odoo/enterprise/";
-
     let args = Args::parse();
 
-    match args {
-        Args { diff: true, pull: false, checkout: None, grep: None} => {
-            gyros();
+    // gyros();
+
+    match args.command {
+        Cmd::Diff => {
             git_diff(dir1)?;
             git_diff(dir2)?;
         },
-        Args { diff: false, pull: true, checkout: None, grep: None} => {
-            gyros();
+        Cmd::Pull => {
             git_pull(dir1)?;
             git_pull(dir2)?;
         },
-        Args { diff: false, pull: false, checkout: Some(br), grep: None} => {
-            gyros();
-            git_checkout(dir1, &br)?;
-            git_checkout(dir2, &br)?;
+        Cmd::Checkout{ branch } => {
+            git_checkout(dir1, &branch)?;
+            git_checkout(dir2, &branch)?;
         },
-        Args { diff: false, pull: false, checkout: None, grep: Some(gr)} => {
-            gyros();
-            git_grep_branch(dir1, &gr)?;
-            git_grep_branch(dir2, &gr)?;
+        Cmd::Grep{ text } => {
+            git_grep_branch(dir1, &text)?;
+            git_grep_branch(dir2, &text)?;
         }
-        _ => println!("{}", "<>---<> Exactly one instruction should be given to me :3 <>---<>".red().italic())
     }
 
     Ok(())
