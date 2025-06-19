@@ -65,7 +65,7 @@ fn run_git_command(dir :&str, args: &[&str]) -> io::Result<()> {
 
 fn git_diff(dir: &str) -> io::Result<()> {
     println!("{}", format!("\n<>--------<> DIFF -> {} <>--------<>", dir).green().bold());
-    run_git_command(dir, &["diff", "--color=always", "--name-status"])
+    run_git_command(dir, &["status", "-vv", "--porcelain"])
 }
 
 fn git_pull(dir: &str) -> io::Result<()> {
