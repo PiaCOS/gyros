@@ -1,0 +1,5 @@
+[config]
+repos_list = '''
+	/Users/elliot/Dev/pia/gyros/
+	/Users/elliot/Dev/pia/brainfuck/
+'''

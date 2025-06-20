@@ -2,6 +2,10 @@ use std::process::{ Command, Stdio, Output };
 use std::io::{ self, Write };
 use clap::{ Parser, Subcommand };
 use colored::Colorize;
+use serde_derive::Deserialize;
+use std::fs;
+use std::process::exit;
+use toml;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -122,44 +126,57 @@ fn git_grep_branch(dir: &str, grep: &str) -> io::Result<()> {
     execute(output)
 }
 
-// ------------- PRINTS --------------
+// ------------- TOML -------------
 
-/*
-fn gyros() {
-    println!("{}", ">-------------------------------------------------------------------------------<".yellow());
-    println!("{}", ">---<>---<>---<>---<>---<>---<>---< G Y R O S >---<>---<>---<>---<>---<>---<>---<".yellow());
-    println!("{}", ">-------------------------------------------------------------------------------<".yellow());
+#[derive(Deserialize)]
+struct Data {
+    config: Config,
 }
-*/
+
+#[derive(Deserialize)]
+struct Config {
+    repos_list: String
+}
+
+fn load(path: &str) -> Vec<String> {
+    let contents = match fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(_) => {
+            eprintln!("Could not read file '{}'", path);
+            exit(1);
+        }
+    };
+    let data: Data = match toml::from_str(&contents) {
+        Ok(d) => d,
+        Err(_) => {
+            eprintln!("Unable to load data from `{}`", path);
+            exit(1);
+        }
+    };
+    let repos: Vec<String> = data.config.repos_list
+        .lines()
+        .map(|x| x.trim().to_owned())
+        .filter(|x| !x.is_empty())
+        .collect();
+    repos
+}
+
+// ------------- RUN --------------
 
 fn main() -> io::Result<()> {
-    let dir1 = "/home/odoo/Dev/odoo/community/";
-    let dir2 = "/home/odoo/Dev/odoo/enterprise/";
     let args = Args::parse();
+    let conf_path = "/Users/elliot/Dev/pia/gyros/.gyros.toml";
+    let repos_path = load(conf_path);
 
-    // gyros();
-
-    match args.command {
-        Cmd::Diff => {
-            git_diff(dir1)?;
-            git_diff(dir2)?;
-        },
-        Cmd::Show => {
-            git_show(dir1)?;
-            git_show(dir2)?;
-        },
-        Cmd::Pull => {
-            git_pull(dir1)?;
-            git_pull(dir2)?;
-        },
-        Cmd::Checkout{ branch } => {
-            git_checkout(dir1, &branch)?;
-            git_checkout(dir2, &branch)?;
-        },
-        Cmd::Grep{ text } => {
-            git_grep_branch(dir1, &text)?;
-            git_grep_branch(dir2, &text)?;
-        }
+    let func_to_execute: Box<dyn Fn(&str) -> io::Result<()>> = match args.command {
+        Cmd::Diff => Box::new(move |repo: &str| git_diff(repo)),
+        Cmd::Show => Box::new(move |repo: &str| git_show(repo)),
+        Cmd::Pull => Box::new(move |repo: &str| git_pull(repo)),
+        Cmd::Checkout{ branch } => Box::new(move |repo: &str| git_checkout(repo, &branch)),
+        Cmd::Grep{ text } => Box::new(move |repo: &str| git_grep_branch(repo, &text)),
+    };
+    for r in repos_path {
+        func_to_execute(&r)?
     }
 
     Ok(())
