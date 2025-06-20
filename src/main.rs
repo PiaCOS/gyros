@@ -14,6 +14,8 @@ struct Args {
 enum Cmd {
     /// Diff on all repos
     Diff,
+    /// Show on all repos
+    Show,
     /// Pull on all repos
     Pull,
     /// Checkout on both repos or fallback to master (give me a branch name)
@@ -66,6 +68,11 @@ fn run_git_command(dir :&str, args: &[&str]) -> io::Result<()> {
 fn git_diff(dir: &str) -> io::Result<()> {
     println!("{}", format!("\n<>--------<> DIFF -> {} <>--------<>", dir).green().bold());
     run_git_command(dir, &["status", "-vv", "--porcelain"])
+}
+
+fn git_show(dir: &str) -> io::Result<()> {
+    println!("{}", format!("\n<>--------<> SHOW -> {} <>--------<>", dir).green().bold());
+    run_git_command(dir, &["show", "--name-only"])
 }
 
 fn git_pull(dir: &str) -> io::Result<()> {
@@ -136,6 +143,10 @@ fn main() -> io::Result<()> {
         Cmd::Diff => {
             git_diff(dir1)?;
             git_diff(dir2)?;
+        },
+        Cmd::Show => {
+            git_show(dir1)?;
+            git_show(dir2)?;
         },
         Cmd::Pull => {
             git_pull(dir1)?;
