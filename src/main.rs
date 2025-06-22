@@ -4,7 +4,7 @@ use clap::{ Parser, Subcommand };
 use colored::Colorize;
 use serde_derive::Deserialize;
 use std::fs;
-use std::process::exit;
+use std::env;
 use toml;
 
 #[derive(Parser, Debug)]
@@ -67,25 +67,29 @@ fn run_git_command(dir :&str, args: &[&str]) -> io::Result<()> {
     execute(output)
 }
 
+fn print_header(label: &str, repo: &str) {
+    println!("{}", format!("\n<>--------<> {} -> {} <>--------<>", label, repo).green().bold());
+}
+
 // ------------ COMMANDS ------------
 
 fn git_diff(dir: &str) -> io::Result<()> {
-    println!("{}", format!("\n<>--------<> DIFF -> {} <>--------<>", dir).green().bold());
+    print_header("DIFF", dir);
     run_git_command(dir, &["status", "-vv", "--porcelain"])
 }
 
 fn git_show(dir: &str) -> io::Result<()> {
-    println!("{}", format!("\n<>--------<> SHOW -> {} <>--------<>", dir).green().bold());
+    print_header("SHOW", dir);
     run_git_command(dir, &["show", "--name-only"])
 }
 
 fn git_pull(dir: &str) -> io::Result<()> {
-    println!("{}", format!("\n<>--------<> PULL -> {} <>--------<>", dir).green().bold());
+    print_header("PULL", dir);
     run_git_command(dir, &["pull"])
 }
 
 fn git_checkout(dir: &str, branch: &str) -> io::Result<()> {
-    println!("{}", format!("\n<>--------<> CHECKOUT {} -> {} <>--------<>", dir, branch).green().bold());
+    print_header("CHECKOUT", dir);
     
     let mut cmd = Command::new("git");
     cmd.args(["checkout", branch]).current_dir(dir);
@@ -111,7 +115,7 @@ fn git_checkout(dir: &str, branch: &str) -> io::Result<()> {
 }
 
 fn git_grep_branch(dir: &str, grep: &str) -> io::Result<()> {
-    println!("{}", format!("\n<>--------<> GREP BRANCH {} -> {} <>--------<>", dir, grep).green().bold());
+    print_header("GREP BRANCH", dir);
 
     let gbranch = Command::new("git")
         .args(["branch", "--color=always"])
@@ -135,38 +139,28 @@ struct Data {
 
 #[derive(Deserialize)]
 struct Config {
-    repos_list: String
+    repos_list: Vec<String>,
 }
 
-fn load(path: &str) -> Vec<String> {
-    let contents = match fs::read_to_string(path) {
-        Ok(c) => c,
-        Err(_) => {
-            eprintln!("Could not read file '{}'", path);
-            exit(1);
-        }
-    };
-    let data: Data = match toml::from_str(&contents) {
-        Ok(d) => d,
-        Err(_) => {
-            eprintln!("Unable to load data from `{}`", path);
-            exit(1);
-        }
-    };
-    let repos: Vec<String> = data.config.repos_list
-        .lines()
-        .map(|x| x.trim().to_owned())
-        .filter(|x| !x.is_empty())
-        .collect();
-    repos
+fn load() -> io::Result<Vec<String>> {
+    let cwd = env::current_dir()?;
+    let conf_path = format!("{}/.gyros.toml", cwd.display());
+
+    let contents = fs::read_to_string(conf_path)?;
+    let data: Data = toml::from_str(&contents).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidData, 
+            format!("TOML parse error: {}", e)
+        )
+    })?;
+    Ok(data.config.repos_list)
 }
 
 // ------------- RUN --------------
 
 fn main() -> io::Result<()> {
     let args = Args::parse();
-    let conf_path = "/Users/elliot/Dev/pia/gyros/.gyros.toml";
-    let repos_path = load(conf_path);
+    let repos_path = load()?;
 
     let func_to_execute: Box<dyn Fn(&str) -> io::Result<()>> = match args.command {
         Cmd::Diff => Box::new(move |repo: &str| git_diff(repo)),
@@ -175,6 +169,7 @@ fn main() -> io::Result<()> {
         Cmd::Checkout{ branch } => Box::new(move |repo: &str| git_checkout(repo, &branch)),
         Cmd::Grep{ text } => Box::new(move |repo: &str| git_grep_branch(repo, &text)),
     };
+
     for r in repos_path {
         func_to_execute(&r)?
     }
