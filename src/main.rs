@@ -25,6 +25,8 @@ enum Cmd {
     Checkout { branch: String },
     /// Grep branches in local branches (give me some text to match)
     Grep { text: String },
+    /// Stash the branches
+    Stash,
 }
 
 // TODO:
@@ -86,6 +88,11 @@ fn git_show(dir: &str) -> io::Result<()> {
 fn git_pull(dir: &str) -> io::Result<()> {
     print_header("PULL", dir);
     run_git_command(dir, &["pull"])
+}
+
+fn git_stash(dir: &str) -> io::Result<()> {
+    print_header("STASH", dir);
+    run_git_command(dir, &["stash"])
 }
 
 fn git_checkout(dir: &str, branch: &str) -> io::Result<()> {
@@ -178,6 +185,7 @@ fn main() -> io::Result<()> {
         Cmd::Diff => Box::new(move |repo: &str| git_diff(repo)),
         Cmd::Show => Box::new(move |repo: &str| git_show(repo)),
         Cmd::Pull => Box::new(move |repo: &str| git_pull(repo)),
+        Cmd::Stash => Box::new(move |repo: &str| git_stash(repo)),
         Cmd::Checkout { branch } => Box::new(move |repo: &str| git_checkout(repo, &branch)),
         Cmd::Grep { text } => Box::new(move |repo: &str| git_grep_branch(repo, &text)),
     };
