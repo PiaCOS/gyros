@@ -1,33 +1,10 @@
-use clap::{Parser, Subcommand};
 use colored::Colorize;
 use serde_derive::Deserialize;
 use std::env;
 use std::fs;
 use std::io::{self, Write};
-use std::process::{Command, Output, Stdio};
+use std::process::{Command, Output};
 
-#[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-struct Args {
-    #[command(subcommand)]
-    command: Cmd,
-}
-
-#[derive(Subcommand, Debug)]
-enum Cmd {
-    /// Diff on all repos
-    Diff,
-    /// Show on all repos
-    Show,
-    /// Pull on all repos
-    Pull,
-    /// Checkout on both repos or fallback to master (give me a branch name)
-    Checkout { branch: String },
-    /// Grep branches in local branches (give me some text to match)
-    Grep { text: String },
-    /// Stash the branches
-    Stash,
-}
 
 // TODO:
 //      - add status, log?, stash, fetch, add/commit?
@@ -38,6 +15,11 @@ enum Cmd {
 //      - context option if already in one repos
 //      - interactive prompt ?
 //      - customizable args
+
+fn get_args() -> Vec<String> {
+    let args: Vec<String> = env::args().collect();
+    args
+}
 
 // ------------ RUNNERS ------------
 
@@ -57,7 +39,7 @@ fn execute(cmd: Output) -> io::Result<()> {
     Ok(())
 }
 
-fn run_git_command(dir: &str, args: &[&str]) -> io::Result<()> {
+fn run_git_command(dir: &str, args: &[String]) -> io::Result<()> {
     let mut cmd = Command::new("git");
     cmd.args(args).current_dir(dir);
     let output = safe_run(&mut cmd)?;
@@ -75,79 +57,10 @@ fn print_header(label: &str, repo: &str) {
 
 // ------------ COMMANDS ------------
 
-fn git_diff(dir: &str) -> io::Result<()> {
-    print_header("DIFF", dir);
-    run_git_command(dir, &["status", "-vv", "--porcelain"])
-}
-
-fn git_show(dir: &str) -> io::Result<()> {
-    print_header("SHOW", dir);
-    run_git_command(dir, &["show", "--name-only"])
-}
-
-fn git_pull(dir: &str) -> io::Result<()> {
-    print_header("PULL", dir);
-    run_git_command(dir, &["pull"])
-}
-
-fn git_stash(dir: &str) -> io::Result<()> {
-    print_header("STASH", dir);
-    run_git_command(dir, &["stash"])
-}
-
-fn git_checkout(dir: &str, branch: &str) -> io::Result<()> {
-    print_header("CHECKOUT", dir);
-
-    let mut cmd = Command::new("git");
-    cmd.args(["checkout", branch]).current_dir(dir);
-    let output = safe_run(&mut cmd)?;
-
-    if output.status.success() {
-        execute(output)
-    } else {
-        println!(
-            "{}",
-            format!("Sorry.. '{}' does not exist on '{}'..", branch, dir)
-                .red()
-                .italic()
-        );
-        println!("{}", "> Failling back to 'master' ~".purple());
-
-        let mut fallback_cmd = Command::new("git");
-        fallback_cmd.args(["checkout", "master"]).current_dir(dir);
-        let fallback = safe_run(&mut fallback_cmd)?;
-
-        if fallback.status.success() {
-            execute(fallback)
-        } else {
-            println!(
-                "{}",
-                "Sorry.. master branch did not work, you may need to check what is going on here ~"
-                    .red()
-                    .italic()
-            );
-            Err(io::Error::other("Failed to checkout branch and fallback"))
-        }
-    }
-}
-
-fn git_grep_branch(dir: &str, grep: &str) -> io::Result<()> {
-    print_header("GREP BRANCH", dir);
-
-    let gbranch = Command::new("git")
-        .args(["branch", "--color=always"])
-        .current_dir(dir)
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("Sorry.. Can't spawn git branch");
-
-    let mut grep_cmd = Command::new("grep");
-    grep_cmd
-        .arg(grep)
-        .stdin(Stdio::from(gbranch.stdout.unwrap()));
-    let output = safe_run(&mut grep_cmd)?;
-    execute(output)
-}
+fn command(dir: &str, args: &Vec<String>) -> io::Result<()> {
+    print_header(&args[1], dir);
+    run_git_command(dir, &args[1..])
+} 
 
 // ------------- TOML -------------
 
@@ -178,21 +91,11 @@ fn load() -> io::Result<Vec<String>> {
 // ------------- RUN --------------
 
 fn main() -> io::Result<()> {
-    let args = Args::parse();
     let repos_path = load()?;
-
-    let func_to_execute: Box<dyn Fn(&str) -> io::Result<()>> = match args.command {
-        Cmd::Diff => Box::new(move |repo: &str| git_diff(repo)),
-        Cmd::Show => Box::new(move |repo: &str| git_show(repo)),
-        Cmd::Pull => Box::new(move |repo: &str| git_pull(repo)),
-        Cmd::Stash => Box::new(move |repo: &str| git_stash(repo)),
-        Cmd::Checkout { branch } => Box::new(move |repo: &str| git_checkout(repo, &branch)),
-        Cmd::Grep { text } => Box::new(move |repo: &str| git_grep_branch(repo, &text)),
-    };
+    let args = get_args();
 
     for r in repos_path {
-        func_to_execute(&r)?
+        command(&r, &args)?;
     }
-
     Ok(())
 }

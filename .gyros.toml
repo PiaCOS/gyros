@@ -1,4 +1,4 @@
 [config]
 repos_list = [  
-	"/Users/elliot/Dev/pia/gyros/",
+	"/home/odoo/Dev/odoo/cli/gyros/",
 ]
