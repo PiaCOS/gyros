@@ -99,10 +99,11 @@ fn load() -> io::Result<Vec<String>> {
 
 // ------------- REPO -------------
 
-fn assert_is_repo(path: &str, repo: &str) -> bool {
+fn assert_is_repo(path: &str, repo_path: &str) -> bool {
     let folder = PathBuf::from(path);
-    if let Some(folder_name) = folder.file_name() {
-        folder_name == repo
+    let repo = PathBuf::from(repo_path);
+    if let Some(folder_name) = folder.file_name() && let Some(repo_name) = repo.file_name() {
+        folder_name == repo_name
     } else {
         false
     }
@@ -129,7 +130,6 @@ fn main() -> io::Result<()> {
         },
         None => repos_path,
     };
-    println!("{:?} -- {:?}", selected_repos, args.git_args);
     for r in selected_repos {
         command(&r, &args.git_args)?;
     }
