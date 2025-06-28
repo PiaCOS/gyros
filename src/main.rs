@@ -1,13 +1,13 @@
+use clap::Parser;
 use colored::Colorize;
-use serde_derive::Deserialize;
 use core::str;
+use serde_derive::Deserialize;
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io::{self, Write};
-use std::process::Command;
-use clap::Parser;
 use std::path::PathBuf;
-use std::collections::HashMap;
+use std::process::Command;
 
 // ------------ CLI -------------
 
@@ -35,14 +35,14 @@ struct Log {
 
 impl Log {
     fn new(label: &str) -> Self {
-        Self { 
-            stdout: String::new(), 
+        Self {
+            stdout: String::new(),
             stderr: String::new(),
             success: true,
             label: label.to_owned(),
         }
     }
-    
+
     fn display(&self) -> io::Result<()> {
         io::stdout().write_all(get_header(&self.label).as_bytes())?;
         io::stdout().write_all(self.stdout.as_bytes())?;
@@ -57,11 +57,11 @@ fn logged_run(cmd: &mut Command, repo: &str) -> Log {
     let mut log = Log::new(&repo.to_owned());
 
     match cmd.output() {
-    Ok(output) => {
+        Ok(output) => {
             log.success = output.status.success();
             log.stdout = String::from_utf8_lossy(&output.stdout).to_string();
             log.stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        },
+        }
         Err(e) => {
             log.success = false;
             log.stderr = e.to_string();
@@ -76,7 +76,10 @@ fn run_git_command(repo: &Repo, args: &[String]) -> io::Result<Log> {
         cmd.args(args).current_dir(&path);
         Ok(logged_run(&mut cmd, &path))
     } else {
-       Err(to_io_err(io::ErrorKind::Other, "There is no path to run the commannd".to_owned())) 
+        Err(to_io_err(
+            io::ErrorKind::Other,
+            "There is no path to run the commannd".to_owned(),
+        ))
     }
 }
 
@@ -109,11 +112,11 @@ fn load() -> io::Result<Vec<Repo>> {
             "No repos found in .gyros.toml".to_owned(),
         ));
     }
-    Ok(data.repos
+    Ok(data
+        .repos
         .iter()
         .map(|(alias, path)| Repo::new(alias, path))
-        .collect::<Vec<Repo>>()
-    )
+        .collect::<Vec<Repo>>())
 }
 
 // ------------- REPO -------------
@@ -139,7 +142,9 @@ impl Repo {
     }
 
     fn assert_equal(&self, repo: &Repo) -> bool {
-        if let Some(alias1) = &self.alias && let Some(alias2) = &repo.alias {
+        if let Some(alias1) = &self.alias
+            && let Some(alias2) = &repo.alias
+        {
             alias1 == alias2
         } else {
             false
@@ -148,10 +153,7 @@ impl Repo {
 }
 
 fn alias_from_name(name: &str) -> Option<String> {
-    PathBuf::from(name)
-        .file_name()?
-        .to_str()
-        .map(str::to_owned)
+    PathBuf::from(name).file_name()?.to_str().map(str::to_owned)
 }
 
 // ------------- RUN --------------
@@ -179,10 +181,15 @@ fn main() -> io::Result<()> {
             if filtered.len() > 0 {
                 filtered
             } else {
-                eprintln!("{}", format!("Coundn't find the repo named '{}' ;-;", name).red().italic());
+                eprintln!(
+                    "{}",
+                    format!("Coundn't find the repo named '{}' ;-;", name)
+                        .red()
+                        .italic()
+                );
                 std::process::exit(1);
             }
-        },
+        }
         None => list_of_repos,
     };
     for repo in selected_repos {
