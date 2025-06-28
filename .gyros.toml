@@ -1,4 +1,3 @@
-[config]
-repos_list = [  
-	"/home/odoo/Dev/odoo/cli/gyros/",
-]
+[repos]
+gyros = "/home/odoo/Dev/odoo/cli/gyros/"
+test = "/home/odoo/Dev/odoo/cli/test_repo/"
