@@ -5,7 +5,7 @@ use serde_derive::Deserialize;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, Write, stderr, stdout};
 use std::process::Command;
 
 // ---------- M A C R O -----------
@@ -37,7 +37,10 @@ enum Cmd {
     /// PullAll all repos
     PullAll,
     /// Run a git command on all repos
-    User { trail: Vec<String> },
+    User {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        trail: Vec<String>,
+    },
 }
 
 // ------------ LOG -------------
@@ -139,12 +142,7 @@ impl Repo {
 // ------------- RUN --------------
 
 fn get_header(label: &str) -> String {
-    format!(
-        "{}",
-        format!("\n<>--------<> {label} <>--------<>\n")
-            .green()
-            .bold()
-    )
+    format!("{}", format!(":: {label}\n").purple().bold())
 }
 
 fn filter_repos(list_of_repos: Vec<Repo>, repo: &str) -> Vec<Repo> {
@@ -158,6 +156,27 @@ fn filter_repos(list_of_repos: Vec<Repo>, repo: &str) -> Vec<Repo> {
         eprintln_red!("Failed to find this repo: '{}' ;-;", repo);
         std::process::exit(1);
     }
+}
+
+fn summary(success_count: u8, failure_count: u8) -> io::Result<()> {
+    if failure_count > 0 {
+        writeln!(
+            stderr(),
+            "{}",
+            format!("\nDone :: {success_count} succeeded - {failure_count} failed\n")
+                .red()
+                .italic()
+        )?;
+    } else {
+        writeln!(
+            stdout(),
+            "{}",
+            format!("\nDone :: {success_count} succeeded - {failure_count} failed\n")
+                .green()
+                .italic()
+        )?;
+    }
+    Ok(())
 }
 
 fn main() -> io::Result<()> {
@@ -177,6 +196,9 @@ fn main() -> io::Result<()> {
         Cmd::User { trail } => trail,
     };
 
+    let mut success_count = 0;
+    let mut failure_count = 0;
+
     // Run the command on each filtered repo
     for repo in selected_repos {
         match run_git_command(&repo, &git_args) {
@@ -185,7 +207,10 @@ fn main() -> io::Result<()> {
                     eprintln_red!("Display failed: {}", e);
                 }
                 if !log.success {
+                    failure_count += 1;
                     eprintln_red!("Command failed in: '{}'", repo.path);
+                } else {
+                    success_count += 1;
                 }
             }
             Err(e) => {
@@ -193,5 +218,6 @@ fn main() -> io::Result<()> {
             }
         }
     }
+    summary(success_count, failure_count)?;
     Ok(())
 }
