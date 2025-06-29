@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use colored::Colorize;
 use core::str;
 use serde_derive::Deserialize;
@@ -6,8 +6,15 @@ use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io::{self, Write};
-use std::path::PathBuf;
 use std::process::Command;
+
+// ---------- M A C R O -----------
+
+macro_rules! eprintln_red {
+    ($($a:tt)*) => {
+        eprintln!("{}", format!($($a)*).red().italic())
+    };
+}
 
 // ------------ CLI -------------
 
@@ -15,13 +22,22 @@ use std::process::Command;
 #[command(name = "gyros")]
 #[command(about = "Run git commands in multiple repos", long_about = None)]
 struct Args {
-    /// Only run command in this repo (partial match)
-    #[arg(long)]
+    /// Run the command in the specified repo only
+    #[arg(long, global = true)]
     only: Option<String>,
 
-    /// The git subcommand and args, e.g. status, log, etc.
-    #[arg(required = true, trailing_var_arg = true)]
-    git_args: Vec<String>,
+    #[command(subcommand)]
+    command: Cmd,
+}
+
+#[derive(Debug, Subcommand)]
+enum Cmd {
+    /// FetchAll all repos
+    FetchAll,
+    /// PullAll all repos
+    PullAll,
+    /// Run a git command on all repos
+    User { trail: Vec<String> },
 }
 
 // ------------ LOG -------------
@@ -54,7 +70,7 @@ impl Log {
 // ------------ RUNNERS ------------
 
 fn logged_run(cmd: &mut Command, repo: &str) -> Log {
-    let mut log = Log::new(&repo.to_owned());
+    let mut log = Log::new(repo);
 
     match cmd.output() {
         Ok(output) => {
@@ -71,21 +87,9 @@ fn logged_run(cmd: &mut Command, repo: &str) -> Log {
 }
 
 fn run_git_command(repo: &Repo, args: &[String]) -> io::Result<Log> {
-    if let Some(path) = &repo.path {
-        let mut cmd = Command::new("git");
-        cmd.args(args).current_dir(&path);
-        Ok(logged_run(&mut cmd, &path))
-    } else {
-        Err(to_io_err(
-            io::ErrorKind::Other,
-            "There is no path to run the commannd".to_owned(),
-        ))
-    }
-}
-
-// Do I need that ? Should i put it elsewhere ?
-fn to_io_err(kind: io::ErrorKind, text: String) -> io::Error {
-    io::Error::new(kind, text)
+    let mut cmd = Command::new("git");
+    cmd.args(args).current_dir(&repo.path);
+    Ok(logged_run(&mut cmd, &repo.path))
 }
 
 // ------------- TOML -------------
@@ -101,13 +105,10 @@ fn load() -> io::Result<Vec<Repo>> {
 
     let contents = fs::read_to_string(conf_path)?;
     let data: Data = toml::from_str(&contents).map_err(|e| {
-        to_io_err(
-            io::ErrorKind::InvalidData,
-            format!("TOML parse error: {}", e),
-        )
+        io::Error::new(io::ErrorKind::InvalidData, format!("TOML parse error: {e}"))
     })?;
     if data.repos.is_empty() {
-        return Err(to_io_err(
+        return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "No repos found in .gyros.toml".to_owned(),
         ));
@@ -122,38 +123,17 @@ fn load() -> io::Result<Vec<Repo>> {
 // ------------- REPO -------------
 
 struct Repo {
-    alias: Option<String>,
-    path: Option<String>,
+    alias: String,
+    path: String,
 }
 
 impl Repo {
     fn new(alias: &str, path: &str) -> Self {
         Self {
-            alias: Some(alias.to_owned()),
-            path: Some(path.to_owned()),
+            alias: alias.to_owned(),
+            path: path.to_owned(),
         }
     }
-
-    fn from_name(name: &str) -> Self {
-        Self {
-            alias: alias_from_name(name),
-            path: None,
-        }
-    }
-
-    fn assert_equal(&self, repo: &Repo) -> bool {
-        if let Some(alias1) = &self.alias
-            && let Some(alias2) = &repo.alias
-        {
-            alias1 == alias2
-        } else {
-            false
-        }
-    }
-}
-
-fn alias_from_name(name: &str) -> Option<String> {
-    PathBuf::from(name).file_name()?.to_str().map(str::to_owned)
 }
 
 // ------------- RUN --------------
@@ -161,47 +141,55 @@ fn alias_from_name(name: &str) -> Option<String> {
 fn get_header(label: &str) -> String {
     format!(
         "{}",
-        format!("\n<>--------<> {} <>--------<>\n", label)
+        format!("\n<>--------<> {label} <>--------<>\n")
             .green()
             .bold()
     )
 }
+
+fn filter_repos(list_of_repos: Vec<Repo>, repo: &str) -> Vec<Repo> {
+    let filtered: Vec<Repo> = list_of_repos
+        .into_iter()
+        .filter(|x| x.alias == repo)
+        .collect();
+    if !filtered.is_empty() {
+        filtered
+    } else {
+        eprintln_red!("Failed to find this repo: '{}' ;-;", repo);
+        std::process::exit(1);
+    }
+}
+
 fn main() -> io::Result<()> {
-    let list_of_repos = load()?;
     let args = Args::parse();
+    let list_of_repos = load()?;
 
     // Filter repos depending on the presence of only tag
     let selected_repos: Vec<Repo> = match args.only {
-        Some(name) => {
-            let repo = Repo::from_name(&name);
-            let filtered: Vec<Repo> = list_of_repos
-                .into_iter()
-                .filter(|x| x.assert_equal(&repo))
-                .collect();
-            if filtered.len() > 0 {
-                filtered
-            } else {
-                eprintln!(
-                    "{}",
-                    format!("Coundn't find the repo named '{}' ;-;", name)
-                        .red()
-                        .italic()
-                );
-                std::process::exit(1);
-            }
-        }
+        Some(repo) => filter_repos(list_of_repos, &repo),
         None => list_of_repos,
     };
+
+    // Parse commands
+    let git_args = match args.command {
+        Cmd::FetchAll => vec!["fetch".to_owned()],
+        Cmd::PullAll => vec!["pull".to_owned()],
+        Cmd::User { trail } => trail,
+    };
+
+    // Run the command on each filtered repo
     for repo in selected_repos {
-        match run_git_command(&repo, &args.git_args) {
+        match run_git_command(&repo, &git_args) {
             Ok(log) => {
-                log.display()?;
+                if let Err(e) = log.display() {
+                    eprintln_red!("Display failed: {}", e);
+                }
                 if !log.success {
-                    eprintln!("'{}' failed", repo.path.unwrap_or("It".to_owned()));
+                    eprintln_red!("Command failed in: '{}'", repo.path);
                 }
             }
             Err(e) => {
-                eprintln!("Couldn't even run: {}", e);
+                eprintln_red!("Run failed: {}", e);
             }
         }
     }
