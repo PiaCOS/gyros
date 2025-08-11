@@ -158,7 +158,7 @@ fn filter_repos(list_of_repos: Vec<Repo>, repo: &str) -> Vec<Repo> {
     }
 }
 
-fn summary(success_count: u8, failure_count: u8) -> io::Result<()> {
+fn summary(success_count: usize, failure_count: usize) -> io::Result<()> {
     if failure_count > 0 {
         writeln!(
             stderr(),
