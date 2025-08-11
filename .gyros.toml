@@ -1,4 +1,3 @@
-[config]
-repos_list = [  
-	"/Users/elliot/Dev/pia/gyros/",
-]
+[repos]
+gyros = "/Users/elliot/Dev/pia/gyros/"
+test = "/Users/elliot/Dev/pia/brainfuck"
