@@ -1,63 +1,82 @@
 # GYROS
 
-## IDEAL WORKFLOW:
+Gyros is a simple multirepo tool, which helps running git commands in multiple repos at the same time.
+It's probably overkill for most people/workflow but it's perfect for me! I use it everyday :sparkles:
 
-> gyros init
-> gyros fetch-all
-> gyros user -- git show --name-status
-> gyros list
-> gyros alias ~/dev/project/repo_with_cool_feature_v2 cool_feature_2
-> gyros --only cool_feature_2 checkout -b better_feature
+## Installation
 
+Gyros can be built from source. After cloning the repo do:
 
-## TODO:
+```bash
+cd gyros
+cargo install --path .
+```
 
-### 1 - Command Revolution
+Don't forget to add `.cargo/bin` to your PATH:
 
-#### Refactor stdout stderr handling
+### Bash / Zsh
 
-Mainly to have a better setup when gyros will use parallelized tasks
+```bash
+export PATH=~/.cargo/bin:$PATH  
+```
 
-- Capture and control output per repo
-- Split stdout/stderr
-- Structure output
+### Fish
 
-#### Refactor CLI
+```fish
+set PATH $PATH ~/.cargo/bin
+```
 
-- Subcommand Enum 
-    - fetch-all
-    - pull-all
-    - user (custom funtions)
-    - only flag
+## Setup
 
-#### Better TOML config
+Firstly you need to create a `.gyros.toml` file:
 
-- Combine Repo struct with assert_is_same_repo (asser_equal)
-- Alias support for repo
-- use --only flag with aliases 
+> `.gyros.toml`
 
-### 2 - Intelligence tools
+```toml
+[repos]
+repo1 = "/home/pia/Dev/repo1"
+repo2 = "/home/pia/Dev/repo2"
+repo3 = "/home/pia/other/some/path/repo3"
+```
+The repo name can be an alias and will act as an identifier to the repository
 
-#### Dryrun setup
+Which would then execute git commands inside the 3 repositories from the folder where `.gyros.toml` was saved.
+```bash 
+/home/pia/
+├── Dev/
+│   ├── repo1
+│   ├── repo2
+│   └── .gyros.conf
+└── other/
+    └── some/
+        └── path/
+            └── repo3
+```
 
-- [DRY-RUN]: blabkabla
-- to test setup
+For now, having multiple config file in the same folder leads to indeterminate behavior.
 
-#### Error tracking + summary
+## Usage
 
-- Have a better output like stats on who failed who succeeded
+The `user` command is just a pass-through to run normal git commands in your repos.
 
-### 3- Kachow
+```bash 
+gyros user diff --name-status
+```
 
-#### Parallel execution
+You can run a command in only one repository with the `--only repo_name` command:
+```bash 
+gyros user push -u dev --only repo1
+```
 
-- learn about frameworks (rayon, tokio, thread, ...)
-- parallel flag
+The repo name is the one used as identifier in your `.gyros.toml`.
 
-### 4 - Optional
+### Other Commands
 
-#### Think about config
+For now, 2 other can be used with gyros, `fetch-all` and `pull-all`. More will be added in the future.
 
-- overrides, conf, ...
-- gyros init
-- --confirm (or prompted with yes/no) for important tasks
+## Improvementsi :honeybee:
+
+Here's what i want to add to Gyros:
+- run commands in parallel (faster)
+- more shortcut commands
+- add custom commands in the conf file
